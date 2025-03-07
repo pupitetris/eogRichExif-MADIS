@@ -1,9 +1,12 @@
-# eogRichExif
-A eog (Eye of GNOME Image Viewer) plugin which shows many camera related Exif info in side pane.
+# eogRichExif (the MADIS version)
 
-To install, put these files (eogRichExif.glade, eogRichExif.py, eogRichExif.plugin) in
+A eog (Eye of GNOME Image Viewer) plugin which shows the metadata set by the UnderCurrency MADIS scanner.
 
-  $XDG_DATA_HOME/eog/plugins/eogRichExif/
+Based on [eogRichExif by count bewantbe](https://github.com/bewantbe/eogRichExif)
+
+To install, put these files (eogRichExifMADIS.glade, eogRichExifMADIS.py, eogRichExifMADIS.plugin) in
+
+  $XDG_DATA_HOME/eog/plugins/eogRichExifMADIS/
 
 Usually default value for $XDG_DATA_HOME is $HOME/.local/share (at least for gnome 3.14)
 
