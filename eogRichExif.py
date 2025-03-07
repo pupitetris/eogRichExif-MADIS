@@ -23,6 +23,9 @@
   along with eogRichExif.  If not, see <http://www.gnu.org/licenses/>.
 '''
 
+# To install on venv, follow Update 2023 instructions:
+# https://stackoverflow.com/questions/26678457/how-do-i-install-python3-gi-within-virtualenv
+# sudo apt install libgirepository1.0-dev
 from gi.repository import GObject, Gtk, Eog
 from os.path import join, basename
 from urllib.parse import urlparse
