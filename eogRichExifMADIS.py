@@ -97,8 +97,8 @@ class eogRichExif(GObject.Object, Eog.WindowActivatable):
 		# http://www.pygtk.org/pygtk2tutorial/sec-Notebooks.html
 		# http://gnipsel.com/glade/
 		builder = Gtk.Builder()
-		builder.add_from_file(join(self.plugin_info.get_data_dir(),\
-								"eogRichExif.glade"))
+		builder.add_from_file(join(self.plugin_info.get_data_dir(),
+					   "eogRichExifMADIS.glade"))
 		self.plugin_window = builder.get_object('eogRichExif')
 		self.label_exif = builder.get_object('label_exif')
 
