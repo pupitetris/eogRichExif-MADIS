@@ -32,6 +32,8 @@ from urllib.parse import urlparse
 import xml.sax.saxutils
 import math
 
+import json
+
 
 try:
 	import exiv2
@@ -74,17 +76,17 @@ class eogRichExif(GObject.Object, Eog.WindowActivatable):
 	Debug = False
 
 	def __init__(self):
-#		will be execulted when activating
+#		will be executed when activating
 		GObject.Object.__init__(self)
 
 	def do_activate(self):
 		if self.Debug:
 			print('The answer landed on my rooftop, whoa')
-		
+
 		# get sidebar
 		self.sidebar = self.window.get_sidebar()
 		# need to track file changes in the EoG thumbview (any better idea?)
-		self.thumbview = self.window.get_thumb_view()		
+		self.thumbview = self.window.get_thumb_view()
 		# the EogImage selected in the thumbview
 		self.thumbImage = None
 		self.cb_ids = {}
@@ -101,18 +103,19 @@ class eogRichExif(GObject.Object, Eog.WindowActivatable):
 		self.label_exif = builder.get_object('label_exif')
 
 		# add dialog to the sidebar
-		Eog.Sidebar.add_page(self.sidebar, "RichExif", self.plugin_window)
+		Eog.Sidebar.add_page(self.sidebar, "MADIS Metadata", self.plugin_window)
+		Eog.Sidebar.set_page(self.sidebar, self.plugin_window)
 
 		self.cb_ids['selection-changed'] = {}
 		self.cb_ids['selection-changed'][self.thumbview] = \
 			self.thumbview.connect('selection-changed', \
 				self.selection_changed_cb, self)
-		
+
 	def do_deactivate(self):
 		'''remove all the callbacks stored in dict self.cb_ids '''
 		if self.Debug:
 			print('The answer fell off my rooftop, woot')
-		
+
 		for S in self.cb_ids:
 			for W, id in self.cb_ids[S].items():
 				W.disconnect(id)
@@ -128,7 +131,7 @@ class eogRichExif(GObject.Object, Eog.WindowActivatable):
 		Event = Gtk.get_current_event()
 		self.filePath = None
 		self.fileURL = None
-		if self.thumbImage != None:		
+		if self.thumbImage != None:
 			self.fileURL = self.thumbImage.get_uri_for_display()
 			# https://docs.python.org/2/library/urlparse.html
 			self.filePath = urlparse(self.fileURL).path
@@ -136,7 +139,7 @@ class eogRichExif(GObject.Object, Eog.WindowActivatable):
 				print('loading thumb meta: \n  ', self.filePath, '\n  URL: ', self.fileURL)
 		else:
 			if self.Debug:
-				print('Fail to load metadata!')
+				print('Failed to load metadata!')
 			return False
 
 		# Read metadata
@@ -150,7 +153,8 @@ class eogRichExif(GObject.Object, Eog.WindowActivatable):
 			return
 
 #		try:
-		self.set_info()
+		self.set_uc_info()
+#		self.set_info()
 #		except KeyError as e:
 #			self.label_exif.set_markup("Metadata incomplete?\n  Error: {0}\n".format(e))
 
@@ -361,5 +365,39 @@ class eogRichExif(GObject.Object, Eog.WindowActivatable):
 			st_markup += '<b>UserComment:</b>\n <tt>%s</tt>\n' % self.exiv2.value_str('Exif.Photo.UserComment')
 
 		self.label_exif.set_markup(st_markup)
+
+
+	def set_uc_info(self):
+
+		st_markup = '<b>FileName:</b>\n %s\n' % self.filePath;
+
+		if 'Exif.Image.Model' in self.metadata:
+			image_make = ''
+			if 'Exif.Image.Make' in self.metadata:
+				image_make = xml.sax.saxutils.escape(self.exiv2.value_str('Exif.Image.Make')) + '\n '
+			image_model = xml.sax.saxutils.escape(self.exiv2.value_str('Exif.Image.Model'))
+			st_markup += '\n<b>Camera:</b>\n %s%s\n' % (image_make, image_model)
+
+		if ('Exif.Image.Software' in self.metadata):
+			st_markup += '\n<b>Software:</b>\n<tt> %s</tt>\n' % self.exiv2.value_str('Exif.Image.Software')
+
+		if ('Exif.Image.Artist' in self.metadata):
+			st_markup += '\n<b>Artist:</b>\n<tt> %s</tt>\n' % self.exiv2.value_str('Exif.Image.Artist')
+
+		if ('Exif.Image.DateTime' in self.metadata):
+			st_markup += '\n<b>DateTime:</b>\n<tt> %s</tt>\n' % self.exiv2.value_str('Exif.Image.DateTime')
+
+		if ('Exif.Image.ImageDescription' in self.metadata):
+			st_markup += '\n<b>ImageDescription:</b>\n<tt> %s</tt>\n' % self.exiv2.value_str('Exif.Image.ImageDescription')
+
+		if ('Exif.Photo.UserComment' in self.metadata):
+			value = self.exiv2.value_str('Exif.Photo.UserComment')
+			heading = 'UserComment'
+			try:
+				value = json.dumps(json.loads(value), ensure_ascii=False, indent=3)
+				heading = 'Metadata'
+			except ValueError as e:
+				value = str(e)
+			st_markup += '\n<b>%s:</b>\n<tt>%s</tt>\n' % (heading, value)
 
 		self.label_exif.set_markup(st_markup)
