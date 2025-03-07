@@ -1,9 +1,11 @@
 '''
-  eogRichExif
+  eogRichExif-MADIS
 
   A eog (Eye of GNOME Image Viewer) plugin which shows many Exif info in side pane.
+  Plugin adapted by Arturo Espinosa <mailto:pupitetris@yahoo.com> to integrate eog
+  with the UnderCurrency MADIS-Console software.
 
-  Thanks to the eogMetaEdit plugin.
+  Thanks to the eogMetaEdit plugin and @bewantbe (https://github.com/bewantbe).
 '''
 
 '''
