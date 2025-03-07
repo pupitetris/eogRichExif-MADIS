@@ -30,8 +30,41 @@ from gi.repository import GObject, Gtk, Eog
 from os.path import join, basename
 from urllib.parse import urlparse
 import xml.sax.saxutils
-import pyexiv2
 import math
+
+
+try:
+	import exiv2
+except ModuleNotFoundError:
+	exiv2 = None
+	import pyexiv2
+
+
+class exiv2Compat():
+	def __init__(self, fname):
+		if exiv2 is not None:
+			self.img = exiv2.ImageFactory.open(fname)
+			self.img.readMetadata()
+			self.exif = self.img.exifData()
+		else:
+			self.exif = pyexiv2.ImageMetadata(fname)
+			self.exif.read()
+
+
+	def metadata(self):
+		return self.exif
+
+
+	def value_str(self, key):
+		if exiv2 is not None:
+			return self.exif[key].value().toString()
+		return self.exif[key].value
+
+
+	def value_float(self, key):
+		if exiv2 is not None:
+			return self.exif[key].value().toFloat()
+		return self.exif[key].value.__float__()
 
 
 class eogRichExif(GObject.Object, Eog.WindowActivatable):
@@ -108,12 +141,12 @@ class eogRichExif(GObject.Object, Eog.WindowActivatable):
 
 		# Read metadata
 		# http://python3-exiv2.readthedocs.org/en/latest/tutorial.html
-		self.metadata = pyexiv2.ImageMetadata(self.filePath)
 		try:
-			self.metadata.read()
-		except:
+			self.exiv2 = exiv2Compat(self.filePath)
+			self.metadata = self.exiv2.metadata()
+		except Exception as e:
 			self.metadata = None
-			self.label_exif.set_markup("Cannot read metadata.\n self.filePath=%s" % self.filePath)
+			self.label_exif.set_markup("Cannot read metadata.\n self.filePath=%s\n Exception=%s" % (self.filePath, str(e)))
 			return
 
 #		try:
@@ -137,8 +170,8 @@ class eogRichExif(GObject.Object, Eog.WindowActivatable):
 		if 'Exif.Image.Model' in self.metadata:
 			image_make = ''
 			if 'Exif.Image.Make' in self.metadata:
-				image_make = xml.sax.saxutils.escape(self.metadata['Exif.Image.Make'].value) + '\n '
-			image_model = xml.sax.saxutils.escape(self.metadata['Exif.Image.Model'].value)
+				image_make = xml.sax.saxutils.escape(self.exiv2.value_str('Exif.Image.Make')) + '\n '
+			image_model = xml.sax.saxutils.escape(self.exiv2.value_str('Exif.Image.Model'))
 			st_markup += '<b>Camera:</b>\n %s%s\n' % (image_make, image_model)
 
 		# Time
@@ -151,7 +184,7 @@ class eogRichExif(GObject.Object, Eog.WindowActivatable):
 		[NO_TIME, 'Exif.Photo.DateTimeDigitized', 'DateTimeDigitized']]
 		for idx, ttag in enumerate(s_time_tag):
 			if ttag[1] in self.metadata:
-				s_time_tag[idx][0] = self.metadata[ttag[1]].value
+				s_time_tag[idx][0] = self.metadata[ttag[1]].value().toString()
 
 		# remove nonsence data
 		s_time_tag = list(filter(lambda x: x[0]!=NO_TIME, s_time_tag))
@@ -166,29 +199,29 @@ class eogRichExif(GObject.Object, Eog.WindowActivatable):
 
 		# ExposureTime
 		if 'Exif.Photo.ExposureTime' in self.metadata:
-			st_exposure_time = self.metadata['Exif.Photo.ExposureTime'].human_value
+			st_exposure_time = self.exiv2.value_str('Exif.Photo.ExposureTime')
 		else:
 			st_exposure_time = '?? s'
 		# FNumber
 		if 'Exif.Photo.FNumber' in self.metadata:
-			f_number = self.metadata['Exif.Photo.FNumber'].human_value
+			f_number = self.exiv2.value_str('Exif.Photo.FNumber')
 		elif 'Exif.Photo.ApertureValue' in self.metadata:
-			f_number = self.metadata['Exif.Photo.ApertureValue'].human_value
+			f_number = self.exiv2.value_str('Exif.Photo.ApertureValue')
 		else:
 			f_number = 'F??'
 		# ISO
 		iso = ''
 		if 'Exif.Photo.ISOSpeedRatings' in self.metadata:
-			iso = self.metadata['Exif.Photo.ISOSpeedRatings'].human_value
+			iso = self.exiv2.value_str('Exif.Photo.ISOSpeedRatings')
 		else:
 			if 'Exif.Nikon3.ISOSettings' in self.metadata:
-				iso = self.metadata['Exif.Nikon3.ISOSettings'].human_value
+				iso = self.exiv2.value_str('Exif.Nikon3.ISOSettings')
 			if 'Exif.NikonIi.ISO' in self.metadata:
-				iso = self.metadata['Exif.NikonIi.ISO'].human_value
-		
+				iso = self.exiv2.value_str('Exif.NikonIi.ISO')
+
 		# extra ISO
 		if 'Exif.NikonIi.ISOExpansion' in self.metadata:
-			iso_ext = self.metadata['Exif.NikonIi.ISOExpansion'].human_value
+			iso_ext = self.exiv2.value_str('Exif.NikonIi.ISOExpansion')
 			if 'off' in iso_ext.lower():
 				iso += '' # do nothing
 			else:
@@ -201,11 +234,11 @@ class eogRichExif(GObject.Object, Eog.WindowActivatable):
 
 		# Focal Length
 		if 'Exif.Photo.FocalLength' in self.metadata:
-			st_focal_length = "%.1f mm" % self.metadata['Exif.Photo.FocalLength'].value.__float__()
+			st_focal_length = "%.1f mm" % self.exiv2.value_float('Exif.Photo.FocalLength')
 		else:
 			st_focal_length = "?? mm"
 		if 'Exif.Photo.FocalLengthIn35mmFilm' in self.metadata:
-			st_focal_length_35mm = "%.1f mm (35mm)" % self.metadata['Exif.Photo.FocalLengthIn35mmFilm'].value.__float__()
+			st_focal_length_35mm = "%.1f mm (35mm)" % self.exiv2.value_float('Exif.Photo.FocalLengthIn35mmFilm')
 		else:
 			st_focal_length_35mm = '?? mm (35mm)'
 		st_markup += '<tt> %s</tt>\n' % (st_focal_length)
@@ -213,32 +246,32 @@ class eogRichExif(GObject.Object, Eog.WindowActivatable):
 
 		if 'Exif.Photo.Flash' in self.metadata:
 			st_markup += '<b>Flash:</b>\n'
-			st_markup += ' %s\n' % self.metadata['Exif.Photo.Flash'].human_value
+			st_markup += ' %s\n' % self.exiv2.value_str('Exif.Photo.Flash')
 
 		def sign(a):
 			return (a > 0) - (a < 0)
-    
+
 		# White Balance
 		st_markup += '<b>WhiteBalance:</b>\n'
 		if 'Exif.Nikon3.WhiteBalance' in self.metadata:
-			wb_extra = self.metadata['Exif.Nikon3.WhiteBalance'].human_value.strip()
+			wb_extra = self.exiv2.value_str('Exif.Nikon3.WhiteBalance').strip()
 			if 'Exif.Nikon3.WhiteBalanceBias' in self.metadata:
-				v = self.metadata['Exif.Nikon3.WhiteBalanceBias'].value
+				v = self.exiv2.value_str('Exif.Nikon3.WhiteBalanceBias')
 				wb_extra += ', Bias: %s:%d, %s:%d' % (('A','_','B')[sign(v[0])+1], abs(v[0]), ('M','_','G')[sign(v[1])+1], abs(v[1]))
 			st_markup += ' %s\n' % wb_extra
 		elif 'Exif.CanonPr.WhiteBalanceRed' in self.metadata:
-			wb_extra = self.metadata['Exif.Photo.WhiteBalance'].human_value.strip()
-			v_r = self.metadata['Exif.CanonPr.WhiteBalanceRed'].value
-			v_b = self.metadata['Exif.CanonPr.WhiteBalanceBlue'].value
+			wb_extra = self.exiv2.value_str('Exif.Photo.WhiteBalance').strip()
+			v_r = self.exiv2.value_str('Exif.CanonPr.WhiteBalanceRed')
+			v_b = self.exiv2.value_str('Exif.CanonPr.WhiteBalanceBlue')
 			wb_extra += ', Bias: R:%d, B:%d' % (v_r, v_b)
 			# not sure the logic
 			if 'Manual' in wb_extra:
-				v_t = self.metadata['Exif.CanonPr.ColorTemperature'].value
+				v_t = self.exiv2.value_str('Exif.CanonPr.ColorTemperature')
 				wb_extra += ', %dK' % v_t
 			st_markup += ' %s\n' % wb_extra
 		else:
 			if 'Exif.Photo.WhiteBalance' in self.metadata:
-				wb = self.metadata['Exif.Photo.WhiteBalance'].human_value
+				wb = self.exiv2.value_str('Exif.Photo.WhiteBalance')
 			else:
 				wb = ''
 			st_markup += ' %s\n' % wb
@@ -246,25 +279,25 @@ class eogRichExif(GObject.Object, Eog.WindowActivatable):
 		# Focus Mode
 		if 'Exif.Nikon3.Focus' in self.metadata:
 			st_markup += '<b>Focus Mode:</b>\n'
-			st_markup += ' %s\n' % self.metadata['Exif.Nikon3.Focus'].value.strip()
+			st_markup += ' %s\n' % self.exiv2.value_str('Exif.Nikon3.Focus').strip()
 			if 'Exif.NikonAf2.ContrastDetectAF' in self.metadata:
-				st_cdaf = self.metadata['Exif.NikonAf2.ContrastDetectAF'].human_value
+				st_cdaf = self.exiv2.value_str('Exif.NikonAf2.ContrastDetectAF')
 				if 'on' in st_cdaf.lower():
 					st_markup += ' ContrastDetectAF:\n   %s\n' % st_cdaf
 			if 'Exif.NikonAf2.PhaseDetectAF' in self.metadata:
-				st_pdaf = self.metadata['Exif.NikonAf2.PhaseDetectAF'].human_value
+				st_pdaf = self.exiv2.value_str('Exif.NikonAf2.PhaseDetectAF')
 				if 'on' in st_pdaf.lower():
 					st_markup += ' PhaseDetectAF:\n   %s\n' % st_pdaf
 
 		if 'Exif.Sony1.FocusMode' in self.metadata:
 			st_markup += '<b>Focus Mode:</b>\n'
-			st_markup += ' %s\n' % self.metadata['Exif.Sony1.FocusMode'].human_value.strip()
-			st_markup += ' %s\n' % self.metadata['Exif.Sony1.AFMode'].human_value.strip()
+			st_markup += ' %s\n' % self.exiv2.value_str('Exif.Sony1.FocusMode').strip()
+			st_markup += ' %s\n' % self.exiv2.value_str('Exif.Sony1.AFMode').strip()
 
 		if 'Exif.CanonCs.FocusMode' in self.metadata:
 			st_markup += '<b>Focus Mode:</b>\n'
-			st_markup += ' %s\n' % self.metadata['Exif.CanonCs.FocusMode'].human_value.strip()
-			st_markup += ' FocusType: %s\n' % self.metadata['Exif.CanonCs.FocusType'].human_value.strip()
+			st_markup += ' %s\n' % self.exiv2.value_str('Exif.CanonCs.FocusMode').strip()
+			st_markup += ' FocusType: %s\n' % self.exiv2.value_str('Exif.CanonCs.FocusType').strip()
 
 		st_markup += '<b>Extra settings:</b>\n'
 		s_tag_name_extra = [
@@ -288,7 +321,7 @@ class eogRichExif(GObject.Object, Eog.WindowActivatable):
 		for tag_name in s_tag_name_extra:
 			if tag_name[0] in self.metadata:
 				st_markup += ' <i>%s:</i>\n   %s\n' % \
-				(tag_name[1], self.metadata[tag_name[0]].human_value)
+				(tag_name[1], self.metadata[tag_name[0]].value().toString())
 
 		st_markup += '<b>Lens:</b>\n'
 		s_tag_name_lens = [
@@ -299,33 +332,34 @@ class eogRichExif(GObject.Object, Eog.WindowActivatable):
 		for tag_name in s_tag_name_lens:
 			if tag_name[0] in self.metadata:
 				st_markup += ' <i>%s:</i> %s\n' % \
-				(tag_name[1], self.metadata[tag_name[0]].human_value)
+				(tag_name[1], self.metadata[tag_name[0]].value().toString())
 
 		st_markup += '<b>Lens Model:</b>\n'
 		if 'Exif.Nikon3.Lens' in self.metadata:
-			st_markup += ' %s\n' % self.metadata['Exif.Nikon3.Lens'].human_value
+			st_markup += ' %s\n' % self.exiv2.value_str('Exif.Nikon3.Lens')
 		if 'Exif.Canon.LensModel' in self.metadata:
-			st_markup += ' %s\n' % self.metadata['Exif.Canon.LensModel'].human_value
+			st_markup += ' %s\n' % self.exiv2.value_str('Exif.Canon.LensModel')
 		if 'Exif.Photo.LensModel' in self.metadata:
-			st_markup += ' %s\n' % self.metadata['Exif.Photo.LensModel'].human_value
+			st_markup += ' %s\n' % self.exiv2.value_str('Exif.Photo.LensModel')
 
 		if 'Exif.GPSInfo.GPSLatitudeRef' in self.metadata:
-			lr = self.metadata['Exif.GPSInfo.GPSLatitudeRef'].value
-			lv = self.metadata['Exif.GPSInfo.GPSLatitude'].value
-			ar = self.metadata['Exif.GPSInfo.GPSLongitudeRef'].value
-			av = self.metadata['Exif.GPSInfo.GPSLongitude'].value
+			lr = self.exiv2.value_str('Exif.GPSInfo.GPSLatitudeRef')
+			lv = self.exiv2.value_str('Exif.GPSInfo.GPSLatitude')
+			ar = self.exiv2.value_str('Exif.GPSInfo.GPSLongitudeRef')
+			av = self.exiv2.value_str('Exif.GPSInfo.GPSLongitude')
 			st_markup += '<b>GPS:</b>\n %.0f° %.0f\' %.2f" %s,\n %.0f° %.0f\' %.2f" %s,\n' % \
 				(float(lv[0]), float(lv[1]), float(lv[2]), lr, \
 				 float(av[0]), float(av[1]), float(av[2]), ar)
-			st_markup += ' %s %s.\n' % (self.metadata['Exif.GPSInfo.GPSAltitude'].human_value,\
-				self.metadata['Exif.GPSInfo.GPSAltitudeRef'].human_value)
+			st_markup += ' %s %s.\n' % (self.exiv2.value_str('Exif.GPSInfo.GPSAltitude'),\
+				self.exiv2.value_str('Exif.GPSInfo.GPSAltitudeRef'))
 
 		previews = self.metadata.previews
 
 		st_markup += '<b>Number of thumbnails:</b>\n <tt>%d</tt>\n' % len(previews)
 
-#		if 'NIKON' in image_make:
-#			if ('Exif.Photo.UserComment' in self.metadata):
-#				st_markup += '<b>UserComment:</b>\n <tt>%s</tt>\n' % self.metadata['Exif.Photo.UserComment'].human_value
+		if ('Exif.Photo.UserComment' in self.metadata):
+			st_markup += '<b>UserComment:</b>\n <tt>%s</tt>\n' % self.exiv2.value_str('Exif.Photo.UserComment')
+
+		self.label_exif.set_markup(st_markup)
 
 		self.label_exif.set_markup(st_markup)
