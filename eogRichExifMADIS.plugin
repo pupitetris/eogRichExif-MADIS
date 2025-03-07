@@ -1,0 +1,9 @@
+[Plugin]
+Loader=python3
+Module=eogRichExifMADIS
+IAge=2
+Name=eogRichExifMADIS
+Icon=postr
+Description=Show MADIS metadata
+Authors=count <bewantbe@gmail.com>, Arturo Espinosa <pupitetris@yahoo.com>
+Copyright=GPL-v3
